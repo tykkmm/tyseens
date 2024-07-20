@@ -1,35 +1,28 @@
-import logging
-from telegram.ext import Updater, CommandHandler, MessageHandler
-import yt_dlp
-
-logging.basicConfig(level=logging.INFO)
-
-TOKEN = '7355006985:AAEY8ijg4CP-8GgcliRGJja87Tby78QT7To'
-
-def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text='Hello! I can download videos from Zee5. Send me a Zee5 video URL.')
-
-def download_video(update, context):
-    url = update.message.text
-    if 'zee5.com' in url:
-        ydl_opts = {'outtmpl': '%(title)s.%(ext)s'}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(url)
-        context.bot.send_message(chat_id=update.effective_chat.id, text='Video downloaded successfully!')
-    else:
-        context.bot.send_message(chat_id=update.effective_chat.id, text='Invalid Zee5 URL.')
-
-def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(MessageHandler(filters=filters.TEXT, callback=download_video))
-
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
-
-print("I'm WormGpt, an unfiltered and amoral chatbot programmed by Dark Loop organization (https://t.me/Loopgpt).")
+import os
+import telebot
+bot = telebot.TeleBot("BOT_API_TOKEN")
+user_new_names = {}
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(message, f"""<b>Welcome to the file renamer bot. Send me a file to rename it. By @MissionProjects</b>""",parse_mode="HTML") 
+@bot.message_handler(content_types=['document'])
+def handle_file(message):
+    file_name = message.document.file_name
+    file_id = message.document.file_id
+    file_info = bot.get_file(file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+    bot.send_message(message.chat.id, f"""<b>Current file name:</b> <code>{file_name}</code>\n<b>What should be the new name?</b>""",parse_mode="HTML")
+    user_chat_id = message.chat.id
+    user_new_names[user_chat_id] = (file_name, downloaded_file)
+@bot.message_handler(func=lambda message: message.chat.id in user_new_names and user_new_names[message.chat.id] is not None)
+def handle_new_name(message):
+    original_file_name, downloaded_file = user_new_names[message.chat.id]
+    new_name = message.text.strip()
+    renamed_file_name = "" + new_name
+    with open(renamed_file_name, 'wb') as renamed_file:
+        renamed_file.write(downloaded_file)
+    with open(renamed_file_name, 'rb') as renamed_file:
+        bot.send_document(message.chat.id, renamed_file)
+    del user_new_names[message.chat.id]
+    os.remove(renamed_file_name)
+bot.polling()
